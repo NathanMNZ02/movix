@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: movixpy
+Version: 0.1.0
+Author-email: Nathan Monzani <nathanmonzani17@gmail.com>
+License-Expression: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: opencv-python-headless>=4.0
+Requires-Dist: imageio-ffmpeg
+Dynamic: license-file
+
+# Example Package
+
+This is a simple example package. You can use
+[GitHub-flavored Markdown](https://guides.github.com/features/mastering-markdown/)
+to write your content.
