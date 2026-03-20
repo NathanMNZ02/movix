@@ -64,22 +64,9 @@ Required dependencies:
 
 ---
 
-### Example Usage
+## Usage Examples
 
-```python
-from movixpy.io import VideoFile, FramesDir
-from movixpy.viewer import SingleViewer
-
-# Load a video
-video = VideoFile("video.mp4")
-
-# Convert the video into a frames directory
-frames = FramesDir("frames/", video_file=video)
-
-# Display the frames
-viewer = SingleViewer("frames/")
-viewer.show()
-```
+Usage examples are available as Jupyter notebooks in the `tests/` folder. Each notebook demonstrates a specific feature of the library and can be run independently.
 
 ---
 
@@ -91,4 +78,4 @@ viewer.show()
 
 - Intuitive handling of videos, GIFs, and images
 
-- Supports multimedial editing via MultiViewe
+- Supports multimedial editing via MultiViewer

@@ -1,6 +1,5 @@
 import cv2 
 import numpy as np
-
 import asyncio
 import imageio_ffmpeg
 import tempfile, os
@@ -21,25 +20,51 @@ class FFmpegRunner:
         """
         Run ffmpeg process asynchronously
         """
-        process = await asyncio.create_subprocess_exec(
-            self.ffmpeg_exe, *args,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL
-        )
-        returncode = await process.wait()
-        if returncode != 0:
-            raise RuntimeError(f"FFmpeg failed with return code {returncode}")
+        try:
+            process = await asyncio.create_subprocess_exec(
+                self.ffmpeg_exe, *args,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL
+            )
+        except NotImplementedError: # fallback and run with subprocess (sync)
+            import subprocess
+
+            result = subprocess.run(
+                [self.ffmpeg_exe, *args],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"FFmpeg failed (sync fallback)\n"
+                    f"stderr: {result.stderr.decode(errors='ignore')}"
+                )
+                
+            return
+        
+        _, stderr = await process.communicate()
+        if process.returncode != 0:
+            raise RuntimeError(
+                f"FFmpeg failed with return code {process.returncode}\n"
+                f"stderr: {stderr.decode(errors='ignore')}"
+            )
         
     async def extract_frames(
         self, 
         input_path: str, 
+        quality: int,
         output_dir: str, 
         ):
         """
         Extract frames from video async
         """
+        if quality not in range(1, 32):
+            raise ValueError("Quality should be in the range 1-31")
+        
         await self._run([
             "-i", input_path, 
+            "-q:v", "2",
             f"{output_dir}/%05d.jpg"
         ])
         
@@ -243,7 +268,6 @@ class OpenCvRunner:
 
         self.mat[dst_y1:dst_y2, dst_x1:dst_x2] = src.mat[src_y1:src_y2, src_x1:src_x2]
         
-    
     def width(self):
         """
         Return the image width

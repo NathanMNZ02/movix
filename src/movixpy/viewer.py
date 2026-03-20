@@ -1,3 +1,4 @@
+import time
 import asyncio
 import numpy as np
 
@@ -40,25 +41,60 @@ class SingleViewer:
         """
         Run loop
         """
-        while(not self._is_stop):
-            for self._frame_idx in range(self._frame_start, self._frame_end):
+        step = 1
+        
+        slow_c = 0
+        speed_c = 0
+        while not self._is_stop:
+            
+            self._frame_idx = 0
+            while self._frame_idx < self._frame_end:
                 if self._is_stop:
                     break
                 
                 await self._play_event.wait()
                 
-                if self._on_frame_update != None:
+                proc_time = 0
+                if self._on_frame_update is not None:
+                    start = time.time()
                     self._on_frame_update(self._frame_idx, self._frames_dir[self._frame_idx])  
+                    end = time.time()
                     
-                await asyncio.sleep(self._delay)
+                    proc_time = end - start
+                    
+                remaining_time = self._delay * step - proc_time
+                if remaining_time >= 0:
+                    if remaining_time > self._delay:
+                        speed_c += 1
+                        slow_c = 0
+                        
+                        if speed_c >= 30:
+                            step -= 1
+                            speed_c = 0
+                    
+                    await asyncio.sleep(remaining_time)
+                else:
+                    speed_c = 0
+                    slow_c += 1
+                    
+                    if slow_c > 5:
+                        step += 1
+                        slow_c = 0
+                
+                self._frame_idx += step
  
-    def start(self):
+    def start(self, loop: asyncio.AbstractEventLoop = None):
         """
         Start the viewer loop (and play for the first time)
         """
         if self._task is None:
             self._is_stop = False
-            self._task = asyncio.create_task(self._run())
+            
+            if loop:
+                asyncio.run_coroutine_threadsafe(self._run(), loop)
+            else:
+                self._task = asyncio.create_task(self._run())
+                
             self.play()
                         
     def play(self):
@@ -163,25 +199,60 @@ class MultiViewer:
         """
         Run loop
         """
-        while(not self._is_stop):
-            for self._frame_idx in range(self._frame_start, self._frame_end):
+        step = 1
+        
+        slow_c = 0
+        speed_c = 0
+        while not self._is_stop:
+            
+            self._frame_idx = 0
+            while self._frame_idx < self._frame_end:
                 if self._is_stop:
                     break
                 
                 await self._play_event.wait()
                 
+                proc_time = 0
                 if self._on_frame_update is not None:
+                    start = time.time()
                     self._on_frame_update(self._frame_idx, self._composite_frames()) 
-
-                await asyncio.sleep(self._delay)
- 
-    def start(self):
+                    end = time.time()
+                    
+                    proc_time = end - start
+                    
+                remaining_time = self._delay * step - proc_time
+                if remaining_time >= 0:
+                    if remaining_time > self._delay:
+                        speed_c += 1
+                        slow_c = 0
+                        
+                        if speed_c >= 30:
+                            step -= 1
+                            speed_c = 0
+                    
+                    await asyncio.sleep(remaining_time)
+                else:
+                    speed_c = 0
+                    slow_c += 1
+                    
+                    if slow_c > 5:
+                        step += 1
+                        slow_c = 0
+                
+                self._frame_idx += step
+                
+    def start(self, loop: asyncio.AbstractEventLoop = None):
         """
         Start the viewer loop (and play for the first time)
         """
         if self._task is None:
             self._is_stop = False
-            self._task = asyncio.create_task(self._run())
+            
+            if loop:
+                asyncio.run_coroutine_threadsafe(self._run(), loop)
+            else:
+                self._task = asyncio.create_task(self._run())
+                
             self.play()
                         
     def play(self):

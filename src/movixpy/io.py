@@ -85,7 +85,6 @@ class FramesDir:
         os.makedirs(path, exist_ok=True)
 
         await video_file.extract_frames(output_path=path)
-
         return cls.from_frames_dir(path)   
          
     def __init__(self, path: str, frames: list[str]):
@@ -160,6 +159,67 @@ class FramesDir:
             raise ValueError("Gif extension not allowed")
         
         await FFmpegRunner().create_gif_from_frames_async(self.path, output_path)
+        
+    def loop(
+        self, 
+        target_frames: int,
+        ):
+        """
+        Extends the sequence to target_frames by looping from the beginning.
+        Example: [0,1,2,3] → [0,1,2,3,0,1,2,3,0,1...]
+        """
+        if target_frames <= len(self.frames):
+            raise ValueError(f"target_frames must be greater than current frame count ({len(self.frames)})")
+        
+        frames_to_add = target_frames - len(self.frames)
+        for i in range(frames_to_add):
+            src = self[i % len(self.frames)]
+            dest_name = f"{len(self.frames) + i:05d}{os.path.splitext(src)[1]}"
+            dest = os.path.join(self.path, dest_name)
+            shutil.copy2(src, dest)
+            self.frames.append(dest_name)
+            
+    def freeze(
+        self, 
+        target_frames: int,
+        ):
+        """
+        Extends the sequence to target_frames by repeating the last frame.
+        Example: [0,1,2,3] → [0,1,2,3,3,3,3,3,3...]
+        """
+        if target_frames <= len(self.frames):
+            raise ValueError(f"target_frames must be greater than current frame count ({len(self.frames)})")
+        
+        last_frame = self[len(self.frames) - 1]
+        ext = os.path.splitext(last_frame)[1]
+        frames_to_add = target_frames - len(self.frames)
+        for i in range(frames_to_add):
+            dest_name = f"{len(self.frames) + i:05d}{ext}"
+            dest = os.path.join(self.path, dest_name)
+            shutil.copy2(last_frame, dest)
+            self.frames.append(dest_name)
+            
+    def bounce(
+        self,
+        target_frames: int,
+        ):
+        """
+        Extends the sequence to target_frames with a ping-pong effect.
+        Example: [0,1,2,3] → [0,1,2,3,2,1,0,1,2,3...]
+        """
+        if target_frames <= len(self.frames):
+            raise ValueError(f"target_frames must be greater than current frame count ({len(self.frames)})")
+
+        frames_to_add = target_frames - len(self.frames)
+        bounce = list(range(len(self.frames))) + list(range(len(self.frames) - 2, 0, -1))
+        for i in range(frames_to_add):
+            src = self[bounce[i % len(bounce)]]
+            ext = os.path.splitext(src)[1]
+            dest_name = f"{len(self.frames) + i:05d}{ext}"
+            dest = os.path.join(self.path, dest_name)
+            shutil.copy2(src, dest)
+            self.frames.append(dest_name)
+    
                 
 ################################################################################################################################################################
 ###
@@ -217,8 +277,12 @@ class VideoFile:
         """
         Extact frames from video
         """
+        if not os.path.isdir(output_path):
+            os.mkdir(output_path)
+            
         await FFmpegRunner().extract_frames(
             self.path,
+            2,
             output_path
         )
     
@@ -251,24 +315,30 @@ class MotionFramesDir(FramesDir):
 
     @classmethod
     def from_frames_dir(cls, path: str, key_positions: list[KeyPosition]) -> "MotionFramesDir":
-        instance = super().from_frames_dir(path)
-        instance._validate_key_positions(key_positions)
-        instance.key_positions = sorted(key_positions, key=lambda k: k.frame_idx)
-        return instance
+        frames_dir_instance = FramesDir.from_frames_dir(path, path)
+        return cls(
+            path=frames_dir_instance.path,
+            frames=frames_dir_instance.frames,
+            key_positions=key_positions
+        )
 
     @classmethod
     def from_image(cls, path: str, image_path: str, key_positions: list[KeyPosition]) -> "MotionFramesDir":
-        instance = super().from_image(path, image_path)
-        instance._validate_key_positions(key_positions)
-        instance.key_positions = sorted(key_positions, key=lambda k: k.frame_idx)
-        return instance
+        frames_dir_instance = FramesDir.from_image(path, image_path)
+        return cls(
+            path=frames_dir_instance.path,
+            frames=frames_dir_instance.frames,
+            key_positions=key_positions
+        )
 
     @classmethod
     async def from_video(cls, path: str, video_file, key_positions: list[KeyPosition]) -> "MotionFramesDir":
-        instance = await super().from_video(path, video_file)
-        instance._validate_key_positions(key_positions)
-        instance.key_positions = sorted(key_positions, key=lambda k: k.frame_idx)
-        return instance
+        frames_dir_instance = await FramesDir.from_video(path, video_file)
+        return cls(
+            path=frames_dir_instance.path,
+            frames=frames_dir_instance.frames,
+            key_positions=key_positions
+        )
 
     def __init__(self, path: str, frames: list[str], key_positions: list[KeyPosition]):
         super().__init__(path, frames)
@@ -285,8 +355,8 @@ class MotionFramesDir(FramesDir):
         total = self.__len__()
         for kp in key_positions:
             if not (0 <= kp.frame_idx < total):
-                raise ValueError(f"KeyPosition.frame_idx={kp.frame_idx} fuori range 0..{total - 1}")
-
+                raise ValueError(f"KeyPosition.frame_idx={kp.frame_idx} out of range 0..{total - 1}")
+            
     def add(
         self, 
         key_position: KeyPosition
@@ -295,7 +365,7 @@ class MotionFramesDir(FramesDir):
         Add new key position
         """
         if not (0 <= key_position.frame_idx < self.__len__()):
-            raise ValueError(f"frame_idx={key_position.frame_idx} fuori range 0..{self.__len__() - 1}")
+            raise ValueError(f"frame_idx={key_position.frame_idx} out of range 0..{self.__len__() - 1}")
         
         self.key_positions = [k for k in self.key_positions if k.frame_idx not in range(key_position.frame_idx - 10, key_position.frame_idx + 10)]
         self.key_positions.append(key_position)
